@@ -1,0 +1,29 @@
+# Lines to ignore: totals, payment, loyalty and tax lines
+SKIP = re.compile(
+    r"total|sub\s*total|vat|change|cash|card|visa|mastercard|amex|balance|due|"
+    r"saving|tender|contactless|auth|tax|points|clubcard|nectar|refund", re.I)
+
+# Item text followed by a price at the end of the line, e.g. "BASMATI RICE 10KG  £15.99 A"
+PRICE = re.compile(r"^(.*?)[\s£]*(-?\d{1,4}[.,]\d{2})\s*[A-Z*]?\s*$")
+
+def scan_receipt(file):
+    # Clean up the photo so the text reader works better
+    img = ImageOps.exif_transpose(Image.open(file)).convert("L")
+    if img.width < 1500:
+        scale = 1500 / img.width
+        img = img.resize((int(img.width * scale), int(img.height * scale)))
+    img = ImageOps.autocontrast(img).filter(ImageFilter.SHARPEN)
+
+    text = pytesseract.image_to_string(img, config="--psm 6")
+
+    rows = []
+    for line in text.splitlines():
+        m = PRICE.match(line.strip())
+        if not m:
+            continue
+        name = re.sub(r"\s{2,}", " ", m.group(1)).strip(" .:-£")
+        price = float(m.group(2).replace(",", "."))
+        if price <= 0 or len(name) < 2 or SKIP.search(name):
+            continue
+        rows.append({"Item": name.title(), "Price £": price})
+    return pd.DataFrame(rows, columns=["Item", "Price £"])

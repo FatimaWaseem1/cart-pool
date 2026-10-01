@@ -1,0 +1,4 @@
+streamlit>=1.42
+pandas
+google-genai
+qrcode[pil]
